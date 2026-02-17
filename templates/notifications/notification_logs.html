@@ -1,0 +1,126 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Notification Logs - Vehicle Security System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">
+        <i class="fas fa-paper-plane"></i> Notification Logs
+    </h1>
+    
+    <div class="card">
+        <div class="card-body">
+            {% if logs %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>Recipient</th>
+                            <th>Alert</th>
+                            <th>Status</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td>{{ log.sent_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                {% if log.notification_type == 'sms' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-sms"></i> SMS
+                                </span>
+                                {% elif log.notification_type == 'email' %}
+                                <span class="badge bg-info">
+                                    <i class="fas fa-envelope"></i> Email
+                                </span>
+                                {% elif log.notification_type == 'push' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-bell"></i> Push
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-cloud"></i> Cloud
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ log.recipient.get_full_name }}<br>
+                                <small class="text-muted">{{ log.recipient_address }}</small>
+                            </td>
+                            <td>
+                                <a href="{% url 'alerts:alert_detail' log.alert.id %}">
+                                    {{ log.alert.title|truncatewords:5 }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if log.is_successful %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check-circle"></i> Sent
+                                </span>
+                                {% else %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-times-circle"></i> Failed
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-info" 
+                                        data-bs-toggle="modal" data-bs-target="#logModal{{ log.id }}">
+                                    <i class="fas fa-info-circle"></i> View
+                                </button>
+                                
+                                <!-- Modal -->
+                                <div class="modal fade" id="logModal{{ log.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Notification Details</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <h6>Message Content:</h6>
+                                                <p class="bg-light p-3 rounded">{{ log.message_content }}</p>
+                                                
+                                                {% if not log.is_successful and log.error_message %}
+                                                <h6 class="text-danger">Error Message:</h6>
+                                                <p class="text-danger">{{ log.error_message }}</p>
+                                                {% endif %}
+                                                
+                                                <h6>Details:</h6>
+                                                <ul>
+                                                    <li><strong>Type:</strong> {{ log.get_notification_type_display }}</li>
+                                                    <li><strong>Recipient:</strong> {{ log.recipient.get_full_name }}</li>
+                                                    <li><strong>Address:</strong> {{ log.recipient_address }}</li>
+                                                    <li><strong>Sent At:</strong> {{ log.sent_at|date:"F d, Y H:i:s" }}</li>
+                                                    <li><strong>Status:</strong> 
+                                                        {% if log.is_successful %}
+                                                        <span class="text-success">Success</span>
+                                                        {% else %}
+                                                        <span class="text-danger">Failed</span>
+                                                        {% endif %}
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-5x text-muted mb-3"></i>
+                <h4>No Notification Logs</h4>
+                <p class="text-muted">No notifications have been sent yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Alert Details - Vehicle Security System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-bell"></i> Alert Details</h1>
+        <a href="{% url 'alerts:alert_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Alerts
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Alert Information -->
+        <div class="col-lg-8 mb-4">
+            <div class="card mb-3">
+                <div class="card-header bg-{% if alert.severity == 'critical' %}danger{% elif alert.severity == 'high' %}warning{% else %}info{% endif %} text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ alert.title }}</h5>
+                        <span class="badge bg-light text-dark">{{ alert.get_severity_display }}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Type:</h6>
+                        <span class="badge bg-secondary">{{ alert.get_alert_type_display }}</span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Message:</h6>
+                        <p>{{ alert.message }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Vehicle:</h6>
+                        <p>{{ alert.vehicle.make }} {{ alert.vehicle.model }} ({{ alert.vehicle.registration_number }})</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Time:</h6>
+                        <p>{{ alert.created_at|date:"F d, Y H:i:s" }} ({{ alert.created_at|timesince }} ago)</p>
+                    </div>
+                    
+                    {% if alert.location %}
+                    <div class="mb-3">
+                        <h6>Location:</h6>
+                        <p>
+                            Lat: {{ alert.location.latitude }}, Lon: {{ alert.location.longitude }}
+                            <a href="https://www.google.com/maps?q={{ alert.location.latitude }},{{ alert.location.longitude }}" 
+                               target="_blank" class="btn btn-sm btn-primary ms-2">
+                                <i class="fas fa-map-marker-alt"></i> View on Map
+                            </a>
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if alert.related_image %}
+                    <div class="mb-3">
+                        <h6>Captured Image:</h6>
+                        <img src="{{ alert.related_image.url }}" class="img-fluid rounded" alt="Alert image">
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <h6>Status:</h6>
+                        <span class="badge bg-{% if alert.status == 'pending' %}warning{% elif alert.status == 'sent' %}info{% elif alert.status == 'acknowledged' %}success{% else %}secondary{% endif %}">
+                            {{ alert.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    {% if alert.acknowledged_by %}
+                    <div class="mb-3">
+                        <h6>Acknowledged By:</h6>
+                        <p>{{ alert.acknowledged_by.get_full_name }} at {{ alert.acknowledged_at|date:"F d, Y H:i:s" }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if alert.status != 'acknowledged' %}
+                    <button type="button" class="btn btn-success" onclick="acknowledgeAlert()">
+                        <i class="fas fa-check"></i> Acknowledge Alert
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notification Logs -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-paper-plane"></i> Notifications</h5>
+                </div>
+                <div class="card-body">
+                    {% if notification_logs %}
+                    <div class="list-group list-group-flush">
+                        {% for log in notification_logs %}
+                        <div class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        {% if log.notification_type == 'sms' %}
+                                        <i class="fas fa-sms"></i>
+                                        {% elif log.notification_type == 'email' %}
+                                        <i class="fas fa-envelope"></i>
+                                        {% else %}
+                                        <i class="fas fa-bell"></i>
+                                        {% endif %}
+                                        {{ log.get_notification_type_display }}
+                                    </h6>
+                                    <small class="text-muted">
+                                        To: {{ log.recipient.get_full_name }}<br>
+                                        {{ log.sent_at|date:"M d, H:i" }}
+                                    </small>
+                                </div>
+                                <div>
+                                    {% if log.is_successful %}
+                                    <span class="badge bg-success">Sent</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Failed</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% if not log.is_successful and log.error_message %}
+                            <small class="text-danger d-block mt-2">
+                                Error: {{ log.error_message }}
+                            </small>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-3">No notifications sent yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function acknowledgeAlert() {
+    if (!confirm('Are you sure you want to acknowledge this alert?')) {
+        return;
+    }
+    
+    fetch('{% url "alerts:acknowledge_alert" alert.id %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Alert acknowledged successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Alerts - Vehicle Security System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">
+        <i class="fas fa-bell"></i> Security Alerts
+    </h1>
+    
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6>Total Alerts</h6>
+                    <h2>{{ total_alerts }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h6>Pending Alerts</h6>
+                    <h2>{{ pending_alerts }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6>Critical Alerts</h6>
+                    <h2>{{ critical_alerts }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" class="row">
+                <div class="col-md-3">
+                    <select name="status" class="form-control" onchange="this.form.submit()">
+                        <option value="">All Status</option>
+                        <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="sent" {% if current_status == 'sent' %}selected{% endif %}>Sent</option>
+                        <option value="acknowledged" {% if current_status == 'acknowledged' %}selected{% endif %}>Acknowledged</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="severity" class="form-control" onchange="this.form.submit()">
+                        <option value="">All Severity</option>
+                        <option value="low" {% if current_severity == 'low' %}selected{% endif %}>Low</option>
+                        <option value="medium" {% if current_severity == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="high" {% if current_severity == 'high' %}selected{% endif %}>High</option>
+                        <option value="critical" {% if current_severity == 'critical' %}selected{% endif %}>Critical</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select name="type" class="form-control" onchange="this.form.submit()">
+                        <option value="">All Types</option>
+                        <option value="unauthorized_access" {% if current_type == 'unauthorized_access' %}selected{% endif %}>Unauthorized Access</option>
+                        <option value="auth_failure" {% if current_type == 'auth_failure' %}selected{% endif %}>Auth Failure</option>
+                        <option value="geofence_breach" {% if current_type == 'geofence_breach' %}selected{% endif %}>Geofence Breach</option>
+                        <option value="speed_alert" {% if current_type == 'speed_alert' %}selected{% endif %}>Speed Alert</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <a href="{% url 'alerts:alert_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear Filters
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Alerts List -->
+    <div class="card">
+        <div class="card-body">
+            {% if alerts %}
+            <div class="list-group">
+                {% for alert in alerts %}
+                <a href="{% url 'alerts:alert_detail' alert.id %}" 
+                   class="list-group-item list-group-item-action {% if alert.status == 'pending' %}list-group-item-warning{% endif %}">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <div>
+                            <h5 class="mb-1">
+                                {% if alert.severity == 'critical' %}
+                                <i class="fas fa-exclamation-circle text-danger"></i>
+                                {% elif alert.severity == 'high' %}
+                                <i class="fas fa-exclamation-triangle text-warning"></i>
+                                {% else %}
+                                <i class="fas fa-info-circle text-info"></i>
+                                {% endif %}
+                                {{ alert.title }}
+                            </h5>
+                            <p class="mb-1">{{ alert.message|truncatewords:20 }}</p>
+                            <small class="text-muted">
+                                <i class="fas fa-car"></i> {{ alert.vehicle.registration_number }} | 
+                                <i class="fas fa-clock"></i> {{ alert.created_at|timesince }} ago
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-{% if alert.severity == 'critical' %}danger{% elif alert.severity == 'high' %}warning{% elif alert.severity == 'medium' %}info{% else %}secondary{% endif %}">
+                                {{ alert.get_severity_display }}
+                            </span>
+                            <br>
+                            <span class="badge bg-{% if alert.status == 'pending' %}warning{% elif alert.status == 'sent' %}info{% elif alert.status == 'acknowledged' %}success{% else %}secondary{% endif %} mt-1">
+                                {{ alert.get_status_display }}
+                            </span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-bell-slash fa-5x text-muted mb-3"></i>
+                <h4>No Alerts</h4>
+                <p class="text-muted">There are no alerts matching your criteria.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,275 @@
+{% extends 'base/base.html' %}
+
+{% block title %}{{ vehicle.registration_number }} - Vehicle Security System{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #map { height: 450px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="fas fa-car"></i> {{ vehicle.make }} {{ vehicle.model }}
+            <span class="badge {% if vehicle.status == 'active' %}bg-success{% elif vehicle.status == 'stolen' %}bg-danger{% else %}bg-secondary{% endif %}">
+                {{ vehicle.get_status_display }}
+            </span>
+        </h1>
+        <a href="{% url 'dashboard:vehicle_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Vehicles
+        </a>
+    </div>
+    
+    <div class="row">
+        <!-- Vehicle Information -->
+        <div class="col-lg-4 mb-4">
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> Vehicle Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Registration:</strong></td>
+                            <td>{{ vehicle.registration_number }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Make/Model:</strong></td>
+                            <td>{{ vehicle.make }} {{ vehicle.model }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Year:</strong></td>
+                            <td>{{ vehicle.year }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Color:</strong></td>
+                            <td>{{ vehicle.color }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>VIN:</strong></td>
+                            <td>{{ vehicle.vin|default:"N/A" }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Device ID:</strong></td>
+                            <td><small>{{ vehicle.device_id }}</small></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Owner:</strong></td>
+                            <td>{{ vehicle.owner.get_full_name }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Engine Control -->
+            <div class="card mb-3">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="fas fa-cog"></i> Engine Control</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span>Current Status:</span>
+                        <span id="engine-status" class="badge {% if vehicle.engine_enabled %}bg-success{% else %}bg-danger{% endif %}">
+                            {% if vehicle.engine_enabled %}
+                            <i class="fas fa-power-off"></i> ENABLED
+                            {% else %}
+                            <i class="fas fa-power-off"></i> DISABLED
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    {% if user.role == 'owner' or user == vehicle.owner %}
+                    <form id="engine-control-form">
+                        {% csrf_token %}
+                        <button type="button" class="btn btn-danger w-100 mb-2" onclick="controlEngine('disable')" 
+                                {% if not vehicle.engine_enabled %}disabled{% endif %}>
+                            <i class="fas fa-stop-circle"></i> Disable Engine
+                        </button>
+                        <button type="button" class="btn btn-success w-100" onclick="controlEngine('enable')"
+                                {% if vehicle.engine_enabled %}disabled{% endif %}>
+                            <i class="fas fa-play-circle"></i> Enable Engine
+                        </button>
+                    </form>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-info-circle"></i> Remote engine control via relay
+                    </small>
+                    {% else %}
+                    <p class="text-muted">Only the owner can control the engine.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Current Location -->
+            {% if current_location %}
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-map-marker-alt"></i> Current Location</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <td><strong>Latitude:</strong></td>
+                            <td>{{ current_location.latitude }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Longitude:</strong></td>
+                            <td>{{ current_location.longitude }}</td>
+                        </tr>
+                        {% if current_location.speed %}
+                        <tr>
+                            <td><strong>Speed:</strong></td>
+                            <td>{{ current_location.speed }} km/h</td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <td><strong>Last Update:</strong></td>
+                            <td>{{ current_location.timestamp|timesince }} ago</td>
+                        </tr>
+                    </table>
+                    <a href="https://www.google.com/maps?q={{ current_location.latitude }},{{ current_location.longitude }}" 
+                       target="_blank" class="btn btn-sm btn-primary w-100 mt-2">
+                        <i class="fas fa-external-link-alt"></i> Open in Google Maps
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Map and Events -->
+        <div class="col-lg-8">
+            <!-- Map -->
+            <div class="card mb-3">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-map"></i> Live Tracking</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="map"></div>
+                </div>
+            </div>
+            
+            <!-- Recent Events -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Recent Events</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_events %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Description</th>
+                                    <th>User</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in recent_events %}
+                                <tr>
+                                    <td>{{ event.timestamp|date:"M d, H:i" }}</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ event.get_event_type_display }}</span>
+                                    </td>
+                                    <td>{{ event.description|truncatewords:10 }}</td>
+                                    <td>
+                                        {% if event.user %}
+                                        {{ event.user.username }}
+                                        {% else %}
+                                        -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-muted py-3">No events recorded.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // Initialize map
+    {% if current_location %}
+    var map = L.map('map').setView([{{ current_location.latitude }}, {{ current_location.longitude }}], 15);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    // Add marker for current location
+    var marker = L.marker([{{ current_location.latitude }}, {{ current_location.longitude }}])
+        .addTo(map)
+        .bindPopup('<b>{{ vehicle.registration_number }}</b><br>Current Location');
+    
+    // Add path for recent locations
+    {% if recent_locations %}
+    var locations = [
+        {% for loc in recent_locations %}
+        [{{ loc.latitude }}, {{ loc.longitude }}]{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    var polyline = L.polyline(locations, {color: 'blue', weight: 3, opacity: 0.7}).addTo(map);
+    {% endif %}
+    
+    {% else %}
+    var map = L.map('map').setView([-1.0927, 37.0143], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    L.marker([-1.0927, 37.0143]).addTo(map).bindPopup('No location data available');
+    {% endif %}
+    
+    // Engine control function
+    function controlEngine(action) {
+        if (!confirm('Are you sure you want to ' + action + ' the engine?')) {
+            return;
+        }
+        
+        fetch('{% url "dashboard:vehicle_control" vehicle.id %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: 'action=' + action
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error);
+        });
+    }
+    
+    // Auto-refresh location every 30 seconds
+    setInterval(function() {
+        fetch('{% url "dashboard:vehicle_location_api" vehicle.id %}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.latitude && data.longitude) {
+                    marker.setLatLng([data.latitude, data.longitude]);
+                    map.panTo([data.latitude, data.longitude]);
+                }
+            });
+    }, 30000);
+</script>
+{% endblock %}

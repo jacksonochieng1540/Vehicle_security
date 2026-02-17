@@ -1,0 +1,109 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Alert Rules - Vehicle Security System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-cog"></i> Alert Rules</h1>
+        <a href="/admin/alerts/alertrule/add/" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create New Rule
+        </a>
+    </div>
+    
+    {% if rules %}
+    <div class="row">
+        {% for rule in rules %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header {% if rule.is_active %}bg-success{% else %}bg-secondary{% endif %} text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ rule.name }}</h5>
+                        <span class="badge bg-light text-dark">
+                            {% if rule.is_active %}Active{% else %}Inactive{% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Vehicle:</h6>
+                        <p>{{ rule.vehicle.make }} {{ rule.vehicle.model }} ({{ rule.vehicle.registration_number }})</p>
+                    </div>
+                    
+                    {% if rule.description %}
+                    <div class="mb-3">
+                        <h6>Description:</h6>
+                        <p>{{ rule.description }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <h6>Triggers:</h6>
+                        <ul class="list-unstyled mb-0">
+                            {% if rule.trigger_on_unauthorized_access %}
+                            <li><i class="fas fa-check text-success"></i> Unauthorized Access</li>
+                            {% endif %}
+                            {% if rule.trigger_on_failed_auth %}
+                            <li><i class="fas fa-check text-success"></i> Failed Authentication</li>
+                            {% endif %}
+                            {% if rule.trigger_on_geofence_breach %}
+                            <li><i class="fas fa-check text-success"></i> Geofence Breach</li>
+                            {% endif %}
+                            {% if rule.trigger_on_speed_limit %}
+                            <li><i class="fas fa-check text-success"></i> Speed Limit ({{ rule.speed_limit_threshold }} km/h)</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Notification Methods:</h6>
+                        <div>
+                            {% if rule.send_sms %}
+                            <span class="badge bg-primary me-1"><i class="fas fa-sms"></i> SMS</span>
+                            {% endif %}
+                            {% if rule.send_email %}
+                            <span class="badge bg-info me-1"><i class="fas fa-envelope"></i> Email</span>
+                            {% endif %}
+                            {% if rule.send_push %}
+                            <span class="badge bg-success me-1"><i class="fas fa-bell"></i> Push</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6>Recipients:</h6>
+                        <ul class="list-unstyled mb-0">
+                            {% if rule.notify_owner %}
+                            <li><i class="fas fa-user"></i> Vehicle Owner</li>
+                            {% endif %}
+                            {% for recipient in rule.additional_recipients.all %}
+                            <li><i class="fas fa-user"></i> {{ recipient.get_full_name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <a href="/admin/alerts/alertrule/{{ rule.id }}/change/" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-edit"></i> Edit Rule
+                    </a>
+                </div>
+                <div class="card-footer text-muted">
+                    <small>Created: {{ rule.created_at|date:"M d, Y" }} | Updated: {{ rule.updated_at|date:"M d, Y" }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-cog fa-5x text-muted mb-3"></i>
+            <h4>No Alert Rules Configured</h4>
+            <p class="text-muted">Create your first alert rule to start receiving notifications.</p>
+            <a href="/admin/alerts/alertrule/add/" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create Alert Rule
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

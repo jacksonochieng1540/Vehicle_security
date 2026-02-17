@@ -1,0 +1,100 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Vehicles - Vehicle Security System{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-car-side"></i> My Vehicles</h1>
+        {% if user.role == 'owner' %}
+        <a href="/admin/vehicle_tracking/vehicle/add/" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Vehicle
+        </a>
+        {% endif %}
+    </div>
+    
+    {% if vehicles %}
+    <div class="row">
+        {% for vehicle in vehicles %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-1">{{ vehicle.make }} {{ vehicle.model }}</h5>
+                            <p class="text-muted mb-0">{{ vehicle.year }}</p>
+                        </div>
+                        <span class="badge {% if vehicle.status == 'active' %}bg-success{% elif vehicle.status == 'stolen' %}bg-danger{% else %}bg-secondary{% endif %}">
+                            {{ vehicle.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="fas fa-id-card"></i> Registration:</span>
+                            <strong>{{ vehicle.registration_number }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="fas fa-palette"></i> Color:</span>
+                            <strong>{{ vehicle.color }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="fas fa-microchip"></i> Device ID:</span>
+                            <small class="text-muted">{{ vehicle.device_id }}</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Engine Status:</span>
+                            {% if vehicle.engine_enabled %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-power-off"></i> Enabled
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-power-off"></i> Disabled
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% with location=vehicle.get_current_location %}
+                    {% if location %}
+                    <div class="alert alert-info py-2 mb-3">
+                        <small>
+                            <i class="fas fa-map-marker-alt"></i> Last seen: {{ location.timestamp|timesince }} ago
+                        </small>
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                    
+                    <a href="{% url 'dashboard:vehicle_detail' vehicle.id %}" class="btn btn-primary w-100">
+                        <i class="fas fa-eye"></i> View Details
+                    </a>
+                </div>
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-user"></i> Owner: {{ vehicle.owner.get_full_name }}
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-car fa-5x text-muted mb-3"></i>
+            <h4>No Vehicles Found</h4>
+            <p class="text-muted">You don't have any vehicles registered yet.</p>
+            {% if user.role == 'owner' %}
+            <a href="/admin/vehicle_tracking/vehicle/add/" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Add Your First Vehicle
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
