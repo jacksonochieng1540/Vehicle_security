@@ -1,0 +1,111 @@
+# docker-compose.yml
+# Full-stack deployment for vehicle_security_system
+#
+# Services:
+#   db      — PostgreSQL 15
+#   app     — Django + Gunicorn
+#   nginx   — Nginx reverse proxy + static/media serving
+#
+# Usage:
+#   cp .env.docker .env          # then fill in real values
+#   docker compose up -d --build
+#   docker compose logs -f
+
+version: "3.9"
+
+# ── Named volumes ──────────────────────────────────────────────────────────
+volumes:
+  postgres_data:      # persistent PostgreSQL data
+  static_files:       # collectstatic output shared with Nginx
+  media_files:        # user uploads (face images, alert photos)
+  gunicorn_socket:    # Unix socket shared between app and nginx
+
+# ── Services ───────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL database ─────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: vehicle_security_db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 10s
+
+  # ── Django + Gunicorn ───────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Uncomment the target platform for Raspberry Pi 4/5:
+      # platforms: ["linux/arm64"]
+    container_name: vehicle_security_app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings_production
+      DB_HOST: db           # service name, not localhost
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - gunicorn_socket:/run/gunicorn
+      # Hardware devices — passed through only when running on Raspberry Pi.
+      # Comment these out if deploying to a VPS/cloud (no physical hardware).
+      - /dev/ttyUSB0:/dev/ttyUSB0   # GPS module
+      - /dev/ttyUSB1:/dev/ttyUSB1   # GSM module
+    devices:
+      # GPIO — Raspberry Pi only; comment out on VPS.
+      - /dev/gpiomem:/dev/gpiomem
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+    # Allow the container to access GPIO (Raspberry Pi only)
+    privileged: false
+    group_add:
+      - "dialout"    # serial port access (GPS, GSM)
+      - "gpio"       # GPIO access (relay)
+
+  # ── Nginx ───────────────────────────────────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: deployment/docker/Dockerfile.nginx
+    container_name: vehicle_security_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/media:ro
+      - gunicorn_socket:/run/gunicorn
+      # TLS certificates (Certbot / Let's Encrypt)
+      # Comment these two lines out if no domain yet.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - frontend
+
+# ── Networks ───────────────────────────────────────────────────────────────
+networks:
+  backend:             # db ↔ app (not exposed to internet)
+    driver: bridge
+  frontend:            # app ↔ nginx (nginx is the only one with ports open)
+    driver: bridge
