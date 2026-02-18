@@ -1,0 +1,289 @@
+# .github/workflows/ci-cd.yml
+# CI/CD Pipeline for Vehicle Security System
+#
+# Triggers:
+#   - Push to main/develop branches
+#   - Pull requests to main
+#   - Manual workflow dispatch
+#
+# Jobs:
+#   1. Lint & Test — Code quality checks, unit tests
+#   2. Build Docker Images — Multi-arch (amd64, arm64)
+#   3. Deploy to Staging — Auto-deploy develop branch
+#   4. Deploy to Production — Manual approval for main branch
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Manual trigger
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/vehicle-security
+  PYTHON_VERSION: "3.11"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 1: Lint & Test
+# ═══════════════════════════════════════════════════════════════════════════
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black isort pytest pytest-django pytest-cov
+      
+      - name: Run Black (code formatting check)
+        run: black --check --diff .
+        continue-on-error: true  # Don't fail pipeline on formatting issues
+      
+      - name: Run isort (import sorting check)
+        run: isort --check-only --diff .
+        continue-on-error: true
+      
+      - name: Run Flake8 (linting)
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+      
+      - name: Run Django tests
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          SECRET_KEY: test-secret-key-for-ci-only
+          DB_NAME: test_db
+          DB_USER: test_user
+          DB_PASSWORD: test_pass
+          DB_HOST: localhost
+          DB_PORT: 5432
+          USE_SIMULATED_HARDWARE: "True"
+        run: |
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test --verbosity=2
+      
+      - name: Run hardware module tests
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          SECRET_KEY: test-secret-key
+          DB_NAME: test_db
+          DB_USER: test_user
+          DB_PASSWORD: test_pass
+          DB_HOST: localhost
+          USE_SIMULATED_HARDWARE: "True"
+        run: python test_hardware.py
+      
+      - name: Generate coverage report
+        if: always()
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=html
+        continue-on-error: true
+      
+      - name: Upload coverage to artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 2: Build Docker Images
+# ═══════════════════════════════════════════════════════════════════════════
+  build-docker:
+    name: Build Docker Images
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write  # Push to GitHub Container Registry
+    
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up QEMU (for multi-arch builds)
+        uses: docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Django/Gunicorn image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Build and push Nginx image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./deployment/docker/Dockerfile.nginx
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}-nginx:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 3: Deploy to Staging (auto-deploy 'develop' branch)
+# ═══════════════════════════════════════════════════════════════════════════
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-docker
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    environment:
+      name: staging
+      url: https://staging.vehicle-security.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to staging server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/vehicle_security_system
+            git pull origin develop
+            docker compose pull
+            docker compose up -d --build
+            docker compose exec -T app python manage.py migrate --noinput
+            docker compose exec -T app python manage.py collectstatic --noinput
+      
+      - name: Health check
+        run: |
+          sleep 10
+          curl -f https://staging.vehicle-security.example.com/health/ || exit 1
+      
+      - name: Notify deployment success
+        if: success()
+        run: echo "✅ Staging deployment successful!"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# JOB 4: Deploy to Production (manual approval required)
+# ═══════════════════════════════════════════════════════════════════════════
+  deploy-production:
+    name: Deploy to Production
+    needs: build-docker
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: https://vehicle-security.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to production server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/vehicle_security_system
+            git pull origin main
+            docker compose -f docker-compose.yml pull
+            docker compose -f docker-compose.yml up -d --build
+            docker compose -f docker-compose.yml exec -T app python manage.py migrate --noinput
+            docker compose -f docker-compose.yml exec -T app python manage.py collectstatic --noinput
+      
+      - name: Health check
+        run: |
+          sleep 15
+          curl -f https://vehicle-security.example.com/health/ || exit 1
+      
+      - name: Create release tag
+        if: success()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          TAG="v$(date +'%Y.%m.%d')-${GITHUB_SHA::7}"
+          git tag -a $TAG -m "Production release $TAG"
+          git push origin $TAG
+      
+      - name: Notify deployment success
+        if: success()
+        run: echo "✅ Production deployment successful!"
+      
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/vehicle_security_system
+            docker compose down
+            git reset --hard HEAD~1
+            docker compose up -d
