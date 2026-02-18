@@ -1,0 +1,36 @@
+# docker-compose.override.yml
+# Development overrides — applied automatically when you run docker compose up.
+# This file is NOT used in production (docker-compose.yml only).
+#
+# Changes vs production:
+#   • DEBUG=True
+#   • Django dev server instead of Gunicorn (live reload on code change)
+#   • Ports exposed directly (no Nginx needed)
+#   • Source code mounted as a volume (edit on host, changes seen instantly)
+#   • Hardware devices skipped (uses simulated mode)
+
+version: "3.9"
+
+services:
+
+  app:
+    # Override the production CMD with the Django dev server
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings   # dev settings, DEBUG=True
+      DB_HOST: db
+    volumes:
+      # Mount live source so changes reflect without rebuilding
+      - .:/app
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      # No hardware device mounts in dev
+    ports:
+      - "8000:8000"   # access directly without Nginx
+    # No privileged / group_add needed in dev mode
+
+  nginx:
+    # Skip Nginx entirely in development — access app directly on :8000
+    profiles: ["production-only"]   # this service won't start in normal dev

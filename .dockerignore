@@ -1,0 +1,56 @@
+# .dockerignore
+# Files excluded from the Docker build context.
+# Keeps the image lean and avoids leaking secrets.
+
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment — never copy into image
+venv/
+env/
+ENV/
+
+# Development / local secrets
+.env
+*.env.local
+
+# Local database files
+*.sqlite3
+db.sqlite3
+
+# Django collected statics (regenerated inside container)
+staticfiles/
+
+# Media files (mounted as a volume at runtime)
+media/
+
+# Test artefacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Documentation
+*.md
+docs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Node (if any frontend tooling is added later)
+node_modules/
+npm-debug.log
