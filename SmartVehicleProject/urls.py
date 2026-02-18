@@ -17,6 +17,9 @@ Including another URLconf
 """
 URL configuration for Vehicle Security System
 """
+"""
+URL configuration for Vehicle Security System
+"""
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
