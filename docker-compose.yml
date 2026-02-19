@@ -11,7 +11,7 @@
 #   docker compose up -d --build
 #   docker compose logs -f
 
-version: "3.9"
+#version: "3.9"
 
 # ── Named volumes ──────────────────────────────────────────────────────────
 volumes:

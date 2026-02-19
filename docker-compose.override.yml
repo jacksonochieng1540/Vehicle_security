@@ -9,7 +9,7 @@
 #   • Source code mounted as a volume (edit on host, changes seen instantly)
 #   • Hardware devices skipped (uses simulated mode)
 
-version: "3.9"
+#version: "3.9"
 
 services:
 
