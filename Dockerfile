@@ -4,7 +4,7 @@
 # Compatible with: linux/arm64 (Raspberry Pi 4/5) and linux/amd64 (VPS/laptop)
 
 # ── Stage 1: Builder ───────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 # System dependencies needed only to compile Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,30 +12,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
         g++ \
         libpq-dev \
-        libatlas-base-dev \
+        libblas-dev \
+        liblapack-dev \
         libopenblas-dev \
         libhdf5-dev \
-        libgl1-mesa-glx \
+        libgl1 \
         libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and install wheel
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools
 
 WORKDIR /wheels
 
 # Copy only requirements first so Docker layer cache works
 COPY requirements.txt .
 
-# Build wheels for all packages
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels -r requirements.txt
+# Build wheels for all packages (without --no-deps to ensure all dependencies are included)
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # Install extra packages needed by hardware modules (not in original requirements.txt)
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels \
+RUN pip wheel --no-cache-dir --wheel-dir /wheels \
         pynmea2 \
         requests \
         opencv-contrib-python==4.8.1.78
 
 
 # ── Stage 2: Runtime ───────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 # Labels for documentation
 LABEL maintainer="Jackson Ochieng & Elijah Sunkuli — JKUAT ENE 2026"
@@ -44,9 +48,10 @@ LABEL description="Vehicle Security System — Django + Gunicorn"
 # Runtime system libraries (smaller set than builder)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
-        libatlas3-base \
+        libblas3 \
+        liblapack3 \
         libopenblas0 \
-        libgl1-mesa-glx \
+        libgl1 \
         libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -56,7 +61,7 @@ RUN groupadd --gid 1001 appgroup && \
 
 # Install Python packages from builder's wheels
 COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl \
+RUN pip install --no-cache-dir --find-links=/wheels /wheels/*.whl \
     && rm -rf /wheels
 
 # App directory
