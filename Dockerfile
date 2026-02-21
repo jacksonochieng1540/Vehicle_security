@@ -91,7 +91,7 @@ USER appuser
 # Collect static files at build time so the image is self-contained
 # The SECRET_KEY value here is only for the collectstatic command; the real
 # secret is injected at runtime via environment variables.
-RUN DJANGO_SETTINGS_MODULE=config.settings_production \
+RUN DJANGO_SETTINGS_MODULE=SmartVehicleProject.settings \
     SECRET_KEY=build-time-placeholder-not-used-at-runtime \
     DB_HOST=placeholder \
     python manage.py collectstatic --noinput --clear

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center mt-5">
-    <div class="col-md-8 col-lg-6">
+    <div class="col-md-10 col-lg-8">
         <div class="card shadow">
             <div class="card-body p-5">
                 <div class="text-center mb-4">
@@ -13,7 +13,7 @@
                     <p class="text-muted">Register as an authorized driver</p>
                 </div>
                 
-                <form method="post" enctype="multipart/form-data">
+                <form method="post" enctype="multipart/form-data" id="registration-form">
                     {% csrf_token %}
                     
                     <div class="row">
@@ -79,15 +79,93 @@
                         {% endif %}
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="{{ form.profile_image.id_for_label }}" class="form-label">
-                            <i class="fas fa-camera"></i> Profile Image (for Facial Recognition)
-                        </label>
-                        {{ form.profile_image }}
-                        <small class="form-text text-muted">Upload a clear frontal face photo</small>
-                        {% if form.profile_image.errors %}
-                        <div class="text-danger small">{{ form.profile_image.errors }}</div>
-                        {% endif %}
+                    <!-- 🔥 NEW: Enhanced Face Registration Section -->
+                    <div class="card mb-3 border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-camera"></i> Face Registration (Required for Authentication)
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Upload Option -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-upload"></i> Option 1: Upload Photo
+                                </label>
+                                {{ form.profile_image }}
+                                <small class="form-text text-muted d-block">Upload a clear frontal face photo</small>
+                                {% if form.profile_image.errors %}
+                                <div class="text-danger small">{{ form.profile_image.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="text-center my-3">
+                                <span class="badge bg-secondary">OR</span>
+                            </div>
+                            
+                            <!-- Live Camera Capture Option -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-video"></i> Option 2: Live Camera Capture
+                                </label>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-success btn-lg" onclick="startCamera()" id="start-camera-btn">
+                                        <i class="fas fa-camera"></i> Open Camera
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted d-block">
+                                    Position your face in the frame and click capture
+                                </small>
+                            </div>
+                            
+                            <!-- Camera Preview Section -->
+                            <div id="camera-section" style="display: none;">
+                                <div class="position-relative" style="max-width: 640px; margin: 0 auto;">
+                                    <!-- Video Stream -->
+                                    <video id="camera-preview" width="640" height="480" autoplay playsinline class="w-100 border rounded"></video>
+                                    
+                                    <!-- Face Detection Overlay -->
+                                    <canvas id="detection-overlay" width="640" height="480" 
+                                            style="position: absolute; top: 0; left: 0; pointer-events: none;" 
+                                            class="w-100"></canvas>
+                                    
+                                    <!-- Hidden canvas for capture -->
+                                    <canvas id="capture-canvas" width="640" height="480" style="display:none;"></canvas>
+                                </div>
+                                
+                                <!-- Camera Controls -->
+                                <div class="d-flex gap-2 mt-3 justify-content-center">
+                                    <button type="button" class="btn btn-primary btn-lg" onclick="capturePhoto()">
+                                        <i class="fas fa-camera"></i> Capture Photo
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" onclick="stopCamera()">
+                                        <i class="fas fa-times"></i> Cancel
+                                    </button>
+                                </div>
+                                
+                                <!-- Face Detection Status -->
+                                <div id="detection-status" class="alert alert-info mt-3 text-center" style="display: none;">
+                                    <i class="fas fa-info-circle"></i> <span id="status-text">Initializing face detection...</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Captured Photo Preview -->
+                            <div id="photo-preview" style="display: none;" class="mt-3">
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle"></i> Photo captured successfully!
+                                </div>
+                                <div class="text-center">
+                                    <img id="captured-image" class="img-thumbnail" style="max-width: 400px;">
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-warning btn-sm" onclick="retakePhoto()">
+                                            <i class="fas fa-redo"></i> Retake Photo
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Hidden field to store base64 image data -->
+                                <input type="hidden" name="captured_photo_data" id="captured_photo_data">
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="mb-3">
@@ -110,8 +188,8 @@
                         {% endif %}
                     </div>
                     
-                    <button type="submit" class="btn btn-primary w-100 mb-3">
-                        <i class="fas fa-user-plus"></i> Register
+                    <button type="submit" class="btn btn-primary w-100 btn-lg mb-3">
+                        <i class="fas fa-user-plus"></i> Register & Train Face
                     </button>
                     
                     <div class="text-center">
@@ -124,4 +202,250 @@
         </div>
     </div>
 </div>
+
+<!-- 🔥 Camera Capture & Face Detection JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+
+<script>
+let cameraStream = null;
+let faceDetectionInterval = null;
+let modelsLoaded = false;
+
+// Load face detection models on page load
+async function loadFaceDetectionModels() {
+    try {
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+        modelsLoaded = true;
+        console.log('Face detection models loaded');
+    } catch (error) {
+        console.error('Failed to load face detection models:', error);
+    }
+}
+
+// Initialize on page load
+window.addEventListener('load', loadFaceDetectionModels);
+
+// Start camera with face detection
+async function startCamera() {
+    try {
+        // Request camera access
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',  // Front camera on mobile
+                width: { ideal: 640 }, 
+                height: { ideal: 480 }
+            } 
+        });
+        
+        // Display video stream
+        const video = document.getElementById('camera-preview');
+        video.srcObject = cameraStream;
+        
+        // Show camera section, hide button
+        document.getElementById('camera-section').style.display = 'block';
+        document.getElementById('start-camera-btn').style.display = 'none';
+        document.getElementById('photo-preview').style.display = 'none';
+        
+        // Start face detection overlay
+        if (modelsLoaded) {
+            startFaceDetection();
+        }
+        
+    } catch (error) {
+        alert('❌ Camera access denied or not available.\n\nPlease ensure:\n1. You granted camera permission\n2. Your browser supports camera access\n3. You\'re using HTTPS or localhost\n\nError: ' + error.message);
+        console.error('Camera error:', error);
+    }
+}
+
+// Real-time face detection overlay
+async function startFaceDetection() {
+    const video = document.getElementById('camera-preview');
+    const canvas = document.getElementById('detection-overlay');
+    const statusDiv = document.getElementById('detection-status');
+    const statusText = document.getElementById('status-text');
+    
+    statusDiv.style.display = 'block';
+    
+    // Wait for video to be ready
+    await new Promise(resolve => {
+        video.onloadedmetadata = () => resolve();
+    });
+    
+    faceDetectionInterval = setInterval(async () => {
+        try {
+            const detections = await faceapi.detectAllFaces(
+                video, 
+                new faceapi.TinyFaceDetectorOptions()
+            );
+            
+            // Clear canvas
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (detections.length === 0) {
+                statusText.textContent = '⚠️ No face detected. Position your face in the frame.';
+                statusDiv.className = 'alert alert-warning mt-3 text-center';
+            } else if (detections.length === 1) {
+                statusText.textContent = '✅ Face detected! Ready to capture.';
+                statusDiv.className = 'alert alert-success mt-3 text-center';
+                
+                // Draw green rectangle around detected face
+                const detection = detections[0];
+                const box = detection.box;
+                
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+                
+                // Draw corner markers
+                const cornerSize = 20;
+                ctx.fillStyle = '#00ff00';
+                // Top-left
+                ctx.fillRect(box.x, box.y, cornerSize, 3);
+                ctx.fillRect(box.x, box.y, 3, cornerSize);
+                // Top-right
+                ctx.fillRect(box.x + box.width - cornerSize, box.y, cornerSize, 3);
+                ctx.fillRect(box.x + box.width - 3, box.y, 3, cornerSize);
+                // Bottom-left
+                ctx.fillRect(box.x, box.y + box.height - 3, cornerSize, 3);
+                ctx.fillRect(box.x, box.y + box.height - cornerSize, 3, cornerSize);
+                // Bottom-right
+                ctx.fillRect(box.x + box.width - cornerSize, box.y + box.height - 3, cornerSize, 3);
+                ctx.fillRect(box.x + box.width - 3, box.y + box.height - cornerSize, 3, cornerSize);
+                
+            } else {
+                statusText.textContent = '⚠️ Multiple faces detected. Ensure only one person is in frame.';
+                statusDiv.className = 'alert alert-warning mt-3 text-center';
+            }
+            
+        } catch (error) {
+            console.error('Face detection error:', error);
+        }
+    }, 100);  // Check every 100ms
+}
+
+// Capture photo from video stream
+async function capturePhoto() {
+    const video = document.getElementById('camera-preview');
+    const canvas = document.getElementById('capture-canvas');
+    const context = canvas.getContext('2d');
+    
+    // Verify face is detected before capturing
+    if (modelsLoaded) {
+        try {
+            const detections = await faceapi.detectAllFaces(
+                video, 
+                new faceapi.TinyFaceDetectorOptions()
+            );
+            
+            if (detections.length === 0) {
+                alert('⚠️ No face detected!\n\nPlease position your face clearly in the frame before capturing.');
+                return;
+            } else if (detections.length > 1) {
+                alert('⚠️ Multiple faces detected!\n\nPlease ensure only one person is in the frame.');
+                return;
+            }
+        } catch (error) {
+            console.error('Pre-capture face check failed:', error);
+            // Continue anyway if detection fails
+        }
+    }
+    
+    // Draw current video frame to canvas
+    context.drawImage(video, 0, 0, 640, 480);
+    
+    // Convert canvas to base64 JPEG (high quality)
+    const photoData = canvas.toDataURL('image/jpeg', 0.95);
+    
+    // Store in hidden input field
+    document.getElementById('captured_photo_data').value = photoData;
+    
+    // Show preview
+    document.getElementById('captured-image').src = photoData;
+    document.getElementById('photo-preview').style.display = 'block';
+    
+    // Hide camera
+    stopCamera();
+    
+    // Disable file upload input (user chose camera capture)
+    const fileInput = document.querySelector('input[type="file"][name="profile_image"]');
+    if (fileInput) {
+        fileInput.disabled = true;
+    }
+}
+
+// Retake photo
+function retakePhoto() {
+    document.getElementById('captured_photo_data').value = '';
+    document.getElementById('photo-preview').style.display = 'none';
+    document.getElementById('start-camera-btn').style.display = 'block';
+    
+    // Re-enable file upload
+    const fileInput = document.querySelector('input[type="file"][name="profile_image"]');
+    if (fileInput) {
+        fileInput.disabled = false;
+    }
+}
+
+// Stop camera
+function stopCamera() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+    
+    // Stop face detection
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+        faceDetectionInterval = null;
+    }
+    
+    document.getElementById('camera-section').style.display = 'none';
+    document.getElementById('start-camera-btn').style.display = 'block';
+}
+
+// Form validation before submit
+document.getElementById('registration-form').addEventListener('submit', function(e) {
+    const fileInput = document.querySelector('input[type="file"][name="profile_image"]');
+    const capturedData = document.getElementById('captured_photo_data').value;
+    
+    if (!fileInput.files.length && !capturedData) {
+        e.preventDefault();
+        alert('⚠️ Face photo required!\n\nPlease either:\n1. Upload a photo, OR\n2. Capture using the camera');
+        return false;
+    }
+});
+</script>
+
+<style>
+/* Camera section animations */
+#camera-section {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Video preview styling */
+#camera-preview {
+    border: 3px solid #0d6efd;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* Detection overlay */
+#detection-overlay {
+    border-radius: 8px;
+}
+
+/* Captured image styling */
+#captured-image {
+    border: 3px solid #198754;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+</style>
 {% endblock %}
