@@ -1,3 +1,407 @@
-from django.test import TestCase
+"""
+Vehicle Tracking App Tests
+Tests for vehicles, locations, events, and geofences
+"""
+from django.test import TestCase, Client
+from django.urls import reverse
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from vehicle_tracking.models import Vehicle, VehicleLocation, VehicleEvent, Geofence
+from datetime import timedelta
 
-# Create your tests here.
+User = get_user_model()
+
+
+class VehicleModelTest(TestCase):
+    """Test Vehicle model"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='vehicleowner',
+            password='pass123',
+            first_name='Vehicle',
+            last_name='Owner'
+        )
+        
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KCA 123A',
+            make='Toyota',
+            model='Corolla',
+            year=2020,
+            color='White',
+            vin='JTD123456789',
+            device_id='RPI_001',
+            status='active',
+            engine_enabled=True
+        )
+    
+    def test_vehicle_creation(self):
+        """Test vehicle can be created"""
+        self.assertEqual(self.vehicle.registration_number, 'KCA 123A')
+        self.assertEqual(self.vehicle.make, 'Toyota')
+        self.assertEqual(self.vehicle.owner, self.user)
+        self.assertTrue(self.vehicle.engine_enabled)
+    
+    def test_str_representation(self):
+        """Test string representation"""
+        expected = 'KCA 123A - Toyota Corolla'
+        self.assertEqual(str(self.vehicle), expected)
+    
+    def test_get_latest_location(self):
+        """Test get_latest_location method"""
+        # Create location
+        location = VehicleLocation.objects.create(
+            vehicle=self.vehicle,
+            latitude=-1.0927,
+            longitude=37.0143,
+            speed=45.5
+        )
+        
+        latest = self.vehicle.get_latest_location()
+        self.assertEqual(latest, location)
+    
+    def test_get_status_display(self):
+        """Test status display"""
+        self.assertEqual(self.vehicle.get_status_display(), 'active')
+        
+        self.vehicle.status = 'stolen'
+        self.vehicle.save()
+        self.assertEqual(self.vehicle.get_status_display(), 'stolen')
+
+
+class VehicleLocationTest(TestCase):
+    """Test VehicleLocation model"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(username='user', password='pass')
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KCB 456B',
+            make='Nissan',
+            model='Note',
+            year=2019,
+            device_id='RPI_002'
+        )
+    
+    def test_location_creation(self):
+        """Test location can be created"""
+        location = VehicleLocation.objects.create(
+            vehicle=self.vehicle,
+            latitude=-1.2921,
+            longitude=36.8219,
+            altitude=1650.5,
+            speed=60.0,
+            heading=180
+        )
+        
+        self.assertEqual(location.vehicle, self.vehicle)
+        self.assertEqual(location.latitude, -1.2921)
+        self.assertEqual(location.speed, 60.0)
+        self.assertIsNotNone(location.timestamp)
+    
+    def test_str_representation(self):
+        """Test location string representation"""
+        location = VehicleLocation.objects.create(
+            vehicle=self.vehicle,
+            latitude=-1.0927,
+            longitude=37.0143
+        )
+        
+        self.assertIn('KCB 456B', str(location))
+        self.assertIn('-1.0927', str(location))
+
+
+class VehicleEventTest(TestCase):
+    """Test VehicleEvent model"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(username='eventuser', password='pass')
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KCC 789C',
+            make='Honda',
+            model='Fit',
+            year=2021,
+            device_id='RPI_003'
+        )
+    
+    def test_event_creation(self):
+        """Test event can be created"""
+        event = VehicleEvent.objects.create(
+            vehicle=self.vehicle,
+            event_type='engine_start',
+            description='Engine started by authorized driver',
+            user=self.user
+        )
+        
+        self.assertEqual(event.vehicle, self.vehicle)
+        self.assertEqual(event.event_type, 'engine_start')
+        self.assertEqual(event.user, self.user)
+        self.assertIsNotNone(event.timestamp)
+    
+    def test_event_types(self):
+        """Test different event types"""
+        event_types = [
+            'engine_start',
+            'engine_stop',
+            'auth_success',
+            'auth_failed',
+            'unauthorized_access',
+            'remote_immobilize',
+        ]
+        
+        for event_type in event_types:
+            event = VehicleEvent.objects.create(
+                vehicle=self.vehicle,
+                event_type=event_type,
+                description=f'Test {event_type}'
+            )
+            self.assertEqual(event.event_type, event_type)
+
+
+class GeofenceTest(TestCase):
+    """Test Geofence model"""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(username='geouser', password='pass')
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KCD 234D',
+            make='Mazda',
+            model='Demio',
+            year=2018,
+            device_id='RPI_004'
+        )
+    
+    def test_geofence_creation(self):
+        """Test geofence can be created"""
+        geofence = Geofence.objects.create(
+            vehicle=self.vehicle,
+            name='JKUAT Campus',
+            center_latitude=-1.0927,
+            center_longitude=37.0143,
+            radius_meters=2000,
+            is_active=True,
+            alert_on_entry=False,
+            alert_on_exit=True
+        )
+        
+        self.assertEqual(geofence.name, 'JKUAT Campus')
+        self.assertEqual(geofence.radius_meters, 2000)
+        self.assertTrue(geofence.is_active)
+        self.assertTrue(geofence.alert_on_exit)
+    
+    def test_is_within_geofence(self):
+        """Test point within geofence detection"""
+        geofence = Geofence.objects.create(
+            vehicle=self.vehicle,
+            name='Test Zone',
+            center_latitude=-1.0927,
+            center_longitude=37.0143,
+            radius_meters=1000  # 1km radius
+        )
+        
+        # Point very close to center (within geofence)
+        within = geofence.is_within_geofence(-1.0927, 37.0143)
+        self.assertTrue(within)
+        
+        # Point far away (outside geofence)
+        outside = geofence.is_within_geofence(-1.2864, 36.8172)  # Nairobi CBD
+        self.assertFalse(outside)
+
+
+class DashboardViewTest(TestCase):
+    """Test dashboard views"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='dashuser',
+            password='dashpass123'
+        )
+        self.dashboard_url = reverse('dashboard:home')
+        
+        # Create test vehicle
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KBZ 567E',
+            make='Subaru',
+            model='Impreza',
+            year=2022,
+            device_id='RPI_005'
+        )
+    
+    def test_dashboard_requires_login(self):
+        """Test dashboard requires authentication"""
+        response = self.client.get(self.dashboard_url)
+        self.assertEqual(response.status_code, 302)  # Redirects to login
+    
+    def test_dashboard_loads_for_authenticated_user(self):
+        """Test dashboard loads for logged in user"""
+        self.client.login(username='dashuser', password='dashpass123')
+        response = self.client.get(self.dashboard_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'dashboard/home.html')
+    
+    def test_dashboard_shows_user_vehicles(self):
+        """Test dashboard displays user's vehicles"""
+        self.client.login(username='dashuser', password='dashpass123')
+        response = self.client.get(self.dashboard_url)
+        
+        self.assertContains(response, 'KBZ 567E')
+        self.assertContains(response, 'Subaru Impreza')
+
+
+class VehicleDetailViewTest(TestCase):
+    """Test vehicle detail view"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='detailuser',
+            password='detailpass123'
+        )
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='KCE 890F',
+            make='Toyota',
+            model='Fielder',
+            year=2020,
+            device_id='RPI_006'
+        )
+        self.detail_url = reverse('dashboard:vehicle_detail', args=[self.vehicle.id])
+        
+        # Create location data
+        VehicleLocation.objects.create(
+            vehicle=self.vehicle,
+            latitude=-1.0927,
+            longitude=37.0143,
+            speed=45.5
+        )
+    
+    def test_vehicle_detail_loads(self):
+        """Test vehicle detail page loads"""
+        self.client.login(username='detailuser', password='detailpass123')
+        response = self.client.get(self.detail_url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'vehicle_tracking/vehicle_detail.html')
+        self.assertContains(response, 'KCE 890F')
+    
+    def test_vehicle_detail_shows_location(self):
+        """Test vehicle detail shows GPS location"""
+        self.client.login(username='detailuser', password='detailpass123')
+        response = self.client.get(self.detail_url)
+        
+        self.assertContains(response, '-1.0927')
+        self.assertContains(response, '37.0143')
+
+
+class VehicleControlTest(TestCase):
+    """Test remote vehicle control"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='controluser',
+            password='controlpass123'
+        )
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='TEST 001',
+            make='Test',
+            model='Car',
+            year=2020,
+            device_id='RPI_TEST',
+            engine_enabled=True
+        )
+        self.control_url = reverse('dashboard:vehicle_control', args=[self.vehicle.id])
+    
+    def test_engine_disable(self):
+        """Test remote engine disable"""
+        self.client.login(username='controluser', password='controlpass123')
+        
+        response = self.client.post(self.control_url, {
+            'action': 'disable'
+        })
+        
+        # Check response
+        self.assertEqual(response.status_code, 302)
+        
+        # Check vehicle state
+        self.vehicle.refresh_from_db()
+        self.assertFalse(self.vehicle.engine_enabled)
+        
+        # Check event was logged
+        self.assertTrue(
+            VehicleEvent.objects.filter(
+                vehicle=self.vehicle,
+                event_type='remote_immobilize'
+            ).exists()
+        )
+    
+    def test_engine_enable(self):
+        """Test remote engine enable"""
+        self.vehicle.engine_enabled = False
+        self.vehicle.save()
+        
+        self.client.login(username='controluser', password='controlpass123')
+        
+        response = self.client.post(self.control_url, {
+            'action': 'enable'
+        })
+        
+        # Check vehicle state
+        self.vehicle.refresh_from_db()
+        self.assertTrue(self.vehicle.engine_enabled)
+
+
+class LocationHistoryTest(TestCase):
+    """Test location history view"""
+    
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='historyuser',
+            password='historypass123'
+        )
+        self.vehicle = Vehicle.objects.create(
+            owner=self.user,
+            registration_number='HIST 001',
+            make='History',
+            model='Car',
+            year=2020,
+            device_id='RPI_HIST'
+        )
+        self.history_url = reverse('dashboard:location_history', args=[self.vehicle.id])
+        
+        # Create multiple location points
+        now = timezone.now()
+        for i in range(10):
+            VehicleLocation.objects.create(
+                vehicle=self.vehicle,
+                latitude=-1.09 + (i * 0.001),
+                longitude=37.01 + (i * 0.001),
+                timestamp=now - timedelta(minutes=i*10)
+            )
+    
+    def test_location_history_loads(self):
+        """Test location history page loads"""
+        self.client.login(username='historyuser', password='historypass123')
+        response = self.client.get(self.history_url)
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'vehicle_tracking/history.html')
+    
+    def test_location_history_shows_all_points(self):
+        """Test all location points are displayed"""
+        self.client.login(username='historyuser', password='historypass123')
+        response = self.client.get(self.history_url)
+        
+        # Should have 10 locations
+        self.assertEqual(len(response.context['locations']), 10)
+
+
+# Run tests with:
+# python manage.py test vehicle_tracking
