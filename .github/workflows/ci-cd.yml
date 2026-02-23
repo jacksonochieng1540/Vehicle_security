@@ -66,19 +66,19 @@ jobs:
           pip install flake8 black isort pytest pytest-django pytest-cov
       
       - name: Run Black (code formatting check)
-        run: black --check --diff .
+        run: black --check --diff . --exclude=venv
         continue-on-error: true  # Don't fail pipeline on formatting issues
       
       - name: Run isort (import sorting check)
-        run: isort --check-only --diff .
+        run: isort --check-only --diff . --skip=venv
         continue-on-error: true
       
       - name: Run Flake8 (linting)
         run: |
           # Stop the build if there are Python syntax errors or undefined names
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --exclude=venv,.git,__pycache__,migrations --count --select=E9,F63,F7,F82 --show-source --statistics
           # Exit-zero treats all errors as warnings
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+          flake8 . --exclude=venv,.git,__pycache__,migrations --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
       
       - name: Run Django tests
         env:
@@ -109,7 +109,7 @@ jobs:
       - name: Generate coverage report
         if: always()
         run: |
-          pytest --cov=. --cov-report=xml --cov-report=html
+          pytest --cov=. --cov-report=xml --cov-report=html --ignore=venv
         continue-on-error: true
       
       - name: Upload coverage to artifacts
