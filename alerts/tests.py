@@ -1,5 +1,5 @@
 """
-Alerts App Tests (FULLY FIXED)
+Alerts App Tests (FINAL FIXED VERSION)
 Tests for alerts, notifications, and alert rules
 """
 from django.test import TestCase, Client
@@ -85,7 +85,6 @@ class AlertModelTest(TestCase):
             message='Vehicle exceeded 100 km/h'
         )
         
-        # FIXED: Actual format is 'Speed Alert - ALERT 001 (medium)'
         # Just check that key parts are in the string
         self.assertIn('Speed Alert', str(alert))
         self.assertIn('ALERT 001', str(alert))
@@ -246,7 +245,7 @@ class AlertListViewTest(TestCase):
             device_id='RPI_LIST'
         )
         
-        # FIXED: Assign vehicle to user
+        # Assign vehicle to user
         self.user.vehicle = self.vehicle
         self.user.save()
         
@@ -280,11 +279,12 @@ class AlertListViewTest(TestCase):
         self.client.login(username='listuser', password='listpass123')
         response = self.client.get(self.alerts_url)
         
-        # FIXED: Check that alerts context exists
+        # Check that alerts context exists
         self.assertIn('alerts', response.context)
         # Should have 5 alerts for this user's vehicle
         alerts = response.context['alerts']
-        self.assertEqual(alerts.count(), 5)
+        # FIXED: Use len() instead of .count() for list/queryset
+        self.assertEqual(len(alerts), 5)
     
     def test_filter_by_severity(self):
         """Test filtering alerts by severity"""
@@ -323,12 +323,10 @@ class AlertDetailViewTest(TestCase):
             device_id='RPI_DETAIL'
         )
         
-        # FIXED: Assign vehicle to user
+        # Assign vehicle to user
         self.user.vehicle = self.vehicle
         self.user.save()
         
-        # FIXED: Don't use location_latitude/location_longitude
-        # Your Alert model probably doesn't have these fields
         self.alert = Alert.objects.create(
             vehicle=self.vehicle,
             alert_type='unauthorized_access',
@@ -352,7 +350,8 @@ class AlertDetailViewTest(TestCase):
         response = self.client.get(self.detail_url)
         
         self.assertContains(response, 'Unauthorized Access')
-        self.assertContains(response, 'critical')
+        # FIXED: Check for 'Critical' with capital C (as shown in HTML)
+        self.assertContains(response, 'Critical')
         self.assertContains(response, 'DETAIL 001')
     
     def test_alert_detail_shows_content(self):
@@ -382,7 +381,7 @@ class AlertAcknowledgeTest(TestCase):
             device_id='RPI_ACK'
         )
         
-        # FIXED: Assign vehicle to user
+        # Assign vehicle to user
         self.user.vehicle = self.vehicle
         self.user.save()
         
@@ -401,10 +400,10 @@ class AlertAcknowledgeTest(TestCase):
         self.client.login(username='ackuser', password='ackpass123')
         response = self.client.post(self.ack_url)
         
-        # FIXED: Check if response is successful (200 or 302)
+        # Check if response is successful (200 or 302)
         self.assertIn(response.status_code, [200, 302])
         
-        # FIXED: Only check status if response was successful
+        # Only check status if response was successful
         if response.status_code in [200, 302]:
             self.alert.refresh_from_db()
             # If the acknowledge view worked, status should be 'acknowledged'
@@ -431,7 +430,7 @@ class NotificationLogsViewTest(TestCase):
             device_id='RPI_LOG'
         )
         
-        # FIXED: Assign vehicle to user
+        # Assign vehicle to user
         self.user.vehicle = self.vehicle
         self.user.save()
         
@@ -443,7 +442,7 @@ class NotificationLogsViewTest(TestCase):
             message='Test'
         )
         
-        # FIXED: Check if URL exists
+        # Check if URL exists
         try:
             self.logs_url = reverse('alerts:notification_logs')
         except:
