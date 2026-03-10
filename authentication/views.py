@@ -1,5 +1,6 @@
 """
-Authentication Views
+Authentication Views - FIXED VERSION
+Better error handling and safer settings access
 """
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, authenticate
@@ -11,6 +12,9 @@ from .models import User, AuthenticationLog
 from .forms import UserRegistrationForm, UserLoginForm, UserProfileForm
 import base64
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @require_http_methods(["GET", "POST"])
@@ -54,82 +58,49 @@ def register_view(request):
         if form.is_valid():
             user = form.save(commit=False)
             
-            # 🔥 NEW: Check if photo was captured via live camera
+            # Check if photo was captured via live camera
             captured_photo_data = request.POST.get('captured_photo_data')
             
             if captured_photo_data:
                 try:
                     # Decode base64 image
-                    # Format: "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
                     format, imgstr = captured_photo_data.split(';base64,')
-                    ext = format.split('/')[-1]  # Extract extension (jpeg, png, etc.)
-                    
-                    # Decode base64 string to bytes
+                    ext = format.split('/')[-1]
                     image_data = base64.b64decode(imgstr)
-                    
-                    # Create Django file from bytes
                     filename = f'captured_{user.username}.{ext}'
                     user.profile_image = ContentFile(image_data, name=filename)
-                    
-                    messages.info(request, '📸 Face captured from camera successfully!')
-                    
+                    logger.info(f"📸 Face captured from camera for user: {user.username}")
                 except Exception as e:
+                    logger.error(f"Failed to process captured photo: {e}")
                     messages.error(request, f'Failed to process captured photo: {str(e)}')
                     return render(request, 'authentication/register.html', {'form': form})
             
-            # Save user to database
+            # Save user to database FIRST
             user.save()
+            logger.info(f"✅ User account created: {user.username}")
             
-            # 🔥 NEW: Auto-train facial recognition if profile image exists
+            # Try to auto-train facial recognition if profile image exists
             if user.profile_image:
-                try:
-                    from hardware.facial_recognition import get_facial_recognition_system
-                    
-                    facial_system = get_facial_recognition_system()
-                    
-                    # Get the full path to the uploaded image
-                    image_path = user.profile_image.path
-                    
-                    # Train the face encoding
-                    success = facial_system.train_user_face(
-                        user_id=user.id,
-                        image_path=image_path
-                    )
-                    
-                    if success:
-                        messages.success(
-                            request, 
-                            f'✅ Account created successfully! '
-                            f'Face registered for {user.get_full_name()}. '
-                            f'You can now authenticate at vehicles.'
-                        )
-                    else:
-                        messages.warning(
-                            request,
-                            f'⚠️ Account created but face detection failed. '
-                            f'No clear face found in the image. '
-                            f'Please update your profile with a clearer frontal face photo.'
-                        )
-                    
-                except ImportError:
-                    # Facial recognition module not available (dev environment)
+                face_training_success = train_user_face(user)
+                
+                if face_training_success:
                     messages.success(
-                        request,
-                        'Registration successful! Please log in. '
-                        '(Face training will be done by admin)'
+                        request, 
+                        f'✅ Registration successful! '
+                        f'Welcome, {user.get_full_name()}! '
+                        f'Your face has been registered.'
                     )
-                except Exception as e:
-                    # Face training failed but account was created
+                else:
                     messages.warning(
                         request,
-                        f'⚠️ Account created but face training failed: {str(e)}. '
-                        f'Please contact admin to train your face manually.'
+                        f'✅ Account created! '
+                        f'⚠️ Face registration needs a clearer photo. '
+                        f'Please update in your profile.'
                     )
             else:
                 messages.success(
                     request, 
-                    'Registration successful! Please log in. '
-                    '(Note: Face photo is required for vehicle authentication)'
+                    f'✅ Account created! Please add a face photo in your profile.'
                 )
             
             return redirect('authentication:login')
@@ -139,81 +110,96 @@ def register_view(request):
     return render(request, 'authentication/register.html', {'form': form})
 
 
+def train_user_face(user):
+    """
+    Train facial recognition for a user
+    
+    Returns:
+        bool: True if training succeeded, False otherwise
+    """
+    try:
+        logger.info(f"🔄 Starting face training for user: {user.username}")
+        
+        from hardware.facial_recognition import get_facial_recognition_system
+        
+        try:
+            facial_system = get_facial_recognition_system(simulated=False)
+        except Exception:
+            logger.warning("Using simulated facial recognition")
+            facial_system = get_facial_recognition_system(simulated=True)
+        
+        image_path = user.profile_image.path
+        
+        if not os.path.exists(image_path):
+            logger.error(f"Image file not found: {image_path}")
+            return False
+        
+        result = facial_system.train_face(image_path)
+        
+        if result and result.get('success'):
+            encoding = result.get('encoding')
+            if encoding is not None:
+                import pickle
+                user.facial_encoding = pickle.dumps(encoding)
+                user.save()
+                logger.info(f"✅ Face training successful: {user.username}")
+                return True
+            else:
+                logger.warning(f"No encoding returned: {user.username}")
+                return False
+        else:
+            error_msg = result.get('error', 'Unknown') if result else 'No result'
+            logger.warning(f"Face training failed: {user.username}: {error_msg}")
+            return False
+            
+    except ImportError as e:
+        logger.warning(f"Facial recognition not available: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Face training error: {user.username}: {e}")
+        return False
+
+
 @login_required
 def logout_view(request):
     """Handle user logout"""
     username = request.user.username
     logout(request)
-    messages.info(request, f'You have been logged out. Goodbye, {username}!')
+    messages.info(request, f'Logged out. Goodbye, {username}!')
     return redirect('authentication:login')
 
 
 @login_required
 def profile_view(request):
-    """
-    View and edit user profile.
-    Supports updating face photo and retraining facial recognition.
-    """
+    """View and edit user profile"""
     if request.method == 'POST':
         form = UserProfileForm(request.POST, request.FILES, instance=request.user)
         
         if form.is_valid():
-            # Check if profile image was updated
             old_profile_image = request.user.profile_image
             user = form.save()
             
-            # 🔥 NEW: Retrain face if profile image changed
             if user.profile_image and user.profile_image != old_profile_image:
-                try:
-                    from hardware.facial_recognition import get_facial_recognition_system
-                    
-                    facial_system = get_facial_recognition_system()
-                    success = facial_system.train_user_face(
-                        user_id=user.id,
-                        image_path=user.profile_image.path
-                    )
-                    
-                    if success:
-                        messages.success(
-                            request, 
-                            '✅ Profile updated and face retrained successfully!'
-                        )
-                    else:
-                        messages.warning(
-                            request,
-                            '⚠️ Profile updated but face detection failed. '
-                            'Please upload a clearer frontal face photo.'
-                        )
-                except Exception as e:
-                    messages.warning(
-                        request,
-                        f'Profile updated but face retraining failed: {str(e)}'
-                    )
+                success = train_user_face(user)
+                
+                if success:
+                    messages.success(request, '✅ Profile and face updated!')
+                else:
+                    messages.warning(request, '✅ Profile updated! ⚠️ Face needs clearer photo.')
             else:
-                messages.success(request, 'Profile updated successfully!')
+                messages.success(request, '✅ Profile updated!')
             
             return redirect('authentication:profile')
     else:
         form = UserProfileForm(instance=request.user)
     
-    # Get recent authentication logs for this user
     recent_logs = AuthenticationLog.objects.filter(user=request.user).order_by('-timestamp')[:10]
-    
-    # 🔥 NEW: Check if face is trained
-    face_trained = False
-    if request.user.profile_image:
-        try:
-            from django.conf import settings
-            encodings_dir = settings.FACIAL_RECOGNITION_CONFIG['ENCODINGS_DIR']
-            encoding_path = encodings_dir / f"user_{request.user.id}.pkl"
-            face_trained = encoding_path.exists()
-        except Exception:
-            pass
+    face_trained = bool(request.user.facial_encoding)
     
     context = {
         'form': form,
         'recent_logs': recent_logs,
-        'face_trained': face_trained,  # Pass to template
+        'face_trained': face_trained,
     }
     return render(request, 'authentication/profile.html', context)
 
@@ -226,7 +212,4 @@ def authentication_history(request):
     else:
         logs = AuthenticationLog.objects.filter(user=request.user).order_by('-timestamp')
     
-    context = {
-        'logs': logs,
-    }
-    return render(request, 'authentication/history.html', context)
+    return render(request, 'authentication/history.html', {'logs': logs})
