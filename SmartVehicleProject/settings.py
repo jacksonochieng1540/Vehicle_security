@@ -177,18 +177,18 @@ HARDWARE_CONFIG = {
     'DEVICE_ID': os.environ.get('DEVICE_ID', 'RPI_001'),
     
     # GPS Configuration
-    'GPS_PORT': os.environ.get('GPS_PORT', '/dev/ttyUSB0'),
+    'GPS_PORT': os.environ.get('GPS_PORT', '/dev/serial0'),
     'GPS_BAUDRATE': int(os.environ.get('GPS_BAUDRATE', '9600')),
     
     # GSM Configuration
-    'GSM_PORT': os.environ.get('GSM_PORT', '/dev/ttyUSB1'),
+    'GSM_PORT': os.environ.get('GSM_PORT', '/dev/ttyUSB0'),
     'GSM_BAUDRATE': int(os.environ.get('GSM_BAUDRATE', '9600')),
     
     # Relay Configuration
     'RELAY_GPIO_PIN': int(os.environ.get('RELAY_GPIO_PIN', '17')),
     
     # Simulation Mode (for testing without hardware)
-    'SIMULATED_HARDWARE': os.environ.get('SIMULATED_HARDWARE', 'True') == 'True',
+    'SIMULATED_HARDWARE': os.environ.get('SIMULATED_HARDWARE', 'False') == 'True',
 }
 
 
@@ -213,13 +213,13 @@ GPS_CONFIG = {
 
 
 # ============================================================
-# FACIAL RECOGNITION CONFIGURATION (MERGED - NO DUPLICATES!)
+# FACIAL RECOGNITION CONFIGURATION
 # ============================================================
 
 FACIAL_RECOGNITION_CONFIG = {
     # Recognition settings (CRITICAL - DO NOT REMOVE!)
-    'RECOGNITION_TOLERANCE': 0.6,  # Lower = stricter, Higher = more lenient
-    'MIN_CONFIDENCE': 0.5,  # Minimum confidence to accept a match
+    'RECOGNITION_TOLERANCE': float(os.environ.get('RECOGNITION_TOLERANCE', '0.6')),
+    'MIN_CONFIDENCE': float(os.environ.get('MIN_CONFIDENCE', '0.5')),
     'FACE_DETECTION_METHOD': 'hog',  # 'hog' (faster) or 'cnn' (more accurate)
     'NUM_JITTERS': 1,  # Number of times to re-sample
     'FACE_RECOGNITION_MODEL': 'large',  # 'small' or 'large'
