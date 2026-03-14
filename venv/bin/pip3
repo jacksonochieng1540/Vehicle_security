@@ -1,4 +1,4 @@
-#!/home/notouriousmma/Documents/PLAIN/SmartVehicleProject/venv/bin/python3
+#!/home/notouriousmma/Documents/PLAIN/SmartVehicleProject/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

@@ -3,7 +3,7 @@ Hardware Models
 """
 from django.db import models
 
-
+ 
 class HardwareDevice(models.Model):
     """Track hardware device information"""
     

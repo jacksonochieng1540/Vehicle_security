@@ -11,10 +11,11 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
-from .settings import * 
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -23,16 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-
-SECRET_KEY=os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-key-change-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-SECRET_KEY = os.environ['SECRET_KEY']        
-DEBUG       = True
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+DEBUG = True
 
-
-
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -45,13 +42,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    
-    #local apps
+    # Local apps
     'authentication',
     'vehicle_tracking',
     'hardware',
     'alerts',
-
 ]
 
 MIDDLEWARE = [
@@ -97,7 +92,7 @@ DATABASES = {
     }
 }
 
-# Database
+# PostgreSQL Database (Uncomment for production)
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.postgresql',
@@ -108,6 +103,7 @@ DATABASES = {
 #         'PORT': os.environ.get('DB_PORT', '5432'),
 #     }
 # }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -131,7 +127,6 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Nairobi'
 USE_I18N = True
@@ -141,7 +136,6 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
@@ -152,58 +146,116 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
 # Custom user model
 AUTH_USER_MODEL = 'authentication.User'
+
 
 # Login URLs
 LOGIN_URL = 'authentication:login'
 LOGIN_REDIRECT_URL = 'dashboard:home'
 LOGOUT_REDIRECT_URL = 'authentication:login'
 
-# Hardware Configuration
-HARDWARE_CONFIG = {
-    'CAMERA_DEVICE': 0,  # Camera device index
-    'GPS_PORT': '/dev/ttyUSB0',  # GPS module serial port
-    'GPS_BAUDRATE': 9600,
-    'GSM_PORT': '/dev/ttyUSB1',  # GSM module serial port
-    'GSM_BAUDRATE': 115200,
-    'RELAY_GPIO_PIN': 17,  # BCM pin number for relay control
-    'RECOGNITION_TOLERANCE': 0.6,  # Facial recognition tolerance (lower = stricter)
-    'AUTHENTICATION_TIMEOUT': 30,  # Seconds before re-authentication allowed
-}
-
-# GSM Configuration
-GSM_CONFIG = {
-    'DEFAULT_PHONE': '+254700000000',  # Default notification number
-    'SMS_TIMEOUT': 30,  # SMS sending timeout in seconds
-}
-
-# GPS Configuration
-GPS_CONFIG = {
-    'UPDATE_INTERVAL': 10,  # Location update interval in seconds
-    'MIN_ACCURACY': 20,  # Minimum GPS accuracy in meters
-}
-
-# Facial Recognition Configuration
-FACIAL_RECOGNITION_CONFIG = {
-    'ENCODINGS_DIR': MEDIA_ROOT / 'facial_encodings',
-    'UNAUTHORIZED_IMAGES_DIR': MEDIA_ROOT / 'unauthorized_images',
-    'IMAGE_SIZE': (640, 480),
-    'DETECTION_METHOD': 'hog',  # 'hog' or 'cnn' (cnn is more accurate but slower)
-}
 
 # Session Configuration
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_SAVE_EVERY_REQUEST = True
 
 
+# ============================================================
+# HARDWARE CONFIGURATION
+# ============================================================
 
-# ── Logging to stdout so Docker / journald can collect it ──────────────────
+HARDWARE_CONFIG = {
+    # Device Identification
+    'DEVICE_ID': os.environ.get('DEVICE_ID', 'RPI_001'),
+    
+    # GPS Configuration
+    'GPS_PORT': os.environ.get('GPS_PORT', '/dev/serial0'),
+    'GPS_BAUDRATE': int(os.environ.get('GPS_BAUDRATE', '9600')),
+    
+    # GSM Configuration
+    'GSM_PORT': os.environ.get('GSM_PORT', '/dev/ttyUSB0'),
+    'GSM_BAUDRATE': int(os.environ.get('GSM_BAUDRATE', '9600')),
+    
+    # Relay Configuration
+    'RELAY_GPIO_PIN': int(os.environ.get('RELAY_GPIO_PIN', '17')),
+    
+    # Simulation Mode (for testing without hardware)
+    'SIMULATED_HARDWARE': os.environ.get('SIMULATED_HARDWARE', 'False') == 'True',
+}
+
+
+# ============================================================
+# GSM CONFIGURATION
+# ============================================================
+
+GSM_CONFIG = {
+    'DEFAULT_PHONE': '+254700000000',  # Default notification number
+    'SMS_TIMEOUT': 30,  # SMS sending timeout in seconds
+}
+
+
+# ============================================================
+# GPS CONFIGURATION
+# ============================================================
+
+GPS_CONFIG = {
+    'UPDATE_INTERVAL': 10,  # Location update interval in seconds
+    'MIN_ACCURACY': 20,  # Minimum GPS accuracy in meters
+}
+
+
+# ============================================================
+# FACIAL RECOGNITION CONFIGURATION
+# ============================================================
+
+FACIAL_RECOGNITION_CONFIG = {
+    # Recognition settings (CRITICAL - DO NOT REMOVE!)
+    'RECOGNITION_TOLERANCE': float(os.environ.get('RECOGNITION_TOLERANCE', '0.6')),
+    'MIN_CONFIDENCE': float(os.environ.get('MIN_CONFIDENCE', '0.5')),
+    'FACE_DETECTION_METHOD': 'hog',  # 'hog' (faster) or 'cnn' (more accurate)
+    'NUM_JITTERS': 1,  # Number of times to re-sample
+    'FACE_RECOGNITION_MODEL': 'large',  # 'small' or 'large'
+    
+    # Image processing
+    'RESIZE_FACTOR': 0.25,  # Resize images for faster processing
+    'IMAGE_SIZE': (640, 480),  # Standard image size
+    'MIN_FACE_SIZE': 50,  # Minimum face size in pixels
+    'MAX_FACES_PER_IMAGE': 1,  # Only accept images with 1 face
+    
+    # Storage directories
+    'SAVE_FACE_IMAGES': True,  # Save face images for training
+    'FACE_IMAGES_DIR': 'media/face_images/',
+    'ENCODINGS_DIR': MEDIA_ROOT / 'facial_encodings',
+    'UNAUTHORIZED_IMAGES_DIR': MEDIA_ROOT / 'unauthorized_images',
+    
+    # Detection method (same as FACE_DETECTION_METHOD for compatibility)
+    'DETECTION_METHOD': 'hog',
+}
+
+# Quick access to common settings (for backward compatibility)
+RECOGNITION_TOLERANCE = FACIAL_RECOGNITION_CONFIG['RECOGNITION_TOLERANCE']
+MIN_CONFIDENCE = FACIAL_RECOGNITION_CONFIG['MIN_CONFIDENCE']
+FACE_DETECTION_METHOD = FACIAL_RECOGNITION_CONFIG['FACE_DETECTION_METHOD']
+
+# Create necessary directories
+FACE_IMAGES_DIR = os.path.join(MEDIA_ROOT, 'face_images')
+os.makedirs(FACE_IMAGES_DIR, exist_ok=True)
+os.makedirs(FACIAL_RECOGNITION_CONFIG['ENCODINGS_DIR'], exist_ok=True)
+os.makedirs(FACIAL_RECOGNITION_CONFIG['UNAUTHORIZED_IMAGES_DIR'], exist_ok=True)
+
+
+# ============================================================
+# LOGGING CONFIGURATION
+# ============================================================
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
