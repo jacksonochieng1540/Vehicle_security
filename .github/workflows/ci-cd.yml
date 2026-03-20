@@ -1,6 +1,4 @@
-# .github/workflows/ci-cd.yml
-# CI/CD Pipeline for Vehicle Security System
-# Deployment jobs disabled until servers are configured
+
 
 name: CI/CD Pipeline
 
@@ -15,9 +13,7 @@ env:
   DOCKER_REGISTRY: ghcr.io
   PYTHON_VERSION: "3.11"
 
-# ═══════════════════════════════════════════════════════════════════════════
-# JOB 1: Lint & Test
-# ═══════════════════════════════════════════════════════════════════════════
+
 jobs:
   lint-and-test:
     name: Lint & Test
@@ -79,9 +75,7 @@ jobs:
           python manage.py makemigrations --check --dry-run
           python manage.py test --verbosity=2
 
-# ═══════════════════════════════════════════════════════════════════════════
-# JOB 2: Build Docker Images
-# ═══════════════════════════════════════════════════════════════════════════
+
   build-docker:
     name: Build Docker Images
     needs: lint-and-test
@@ -160,10 +154,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-# ═══════════════════════════════════════════════════════════════════════════
-# DEPLOYMENT JOBS DISABLED
-# To enable: Configure GitHub Secrets for STAGING_HOST, STAGING_USER, STAGING_SSH_KEY
-# ═══════════════════════════════════════════════════════════════════════════
+
 
   # deploy-staging:
   #   name: Deploy to Staging
