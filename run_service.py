@@ -12,13 +12,13 @@ import logging
 from datetime import datetime, timedelta
 import django
 
-# Setup Django environment
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'SmartVehicleProject.settings')
 django.setup()
 
-# Import Django models and hardware modules
+
 from django.utils import timezone
 from authentication.models import User, AuthenticationLog
 from vehicle_tracking.models import Vehicle, VehicleLocation, VehicleEvent
@@ -29,7 +29,7 @@ from hardware.gsm_module import get_gsm_module
 from hardware.relay_control import get_relay_controller
 from hardware.facial_recognition import get_facial_recognition_system
 
-# Setup logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -49,7 +49,7 @@ class VehicleSecurityService:
         logger.info("🚀 SMART VEHICLE SECURITY - HARDWARE SERVICE")
         logger.info("=" * 70)
         
-        # Load configuration
+        
         from django.conf import settings
         self.config = settings.HARDWARE_CONFIG
         self.device_id = self.config['DEVICE_ID']
@@ -58,7 +58,7 @@ class VehicleSecurityService:
         logger.info(f"📋 Device ID: {self.device_id}")
         logger.info(f"🔧 Mode: {'SIMULATED' if self.simulated else 'REAL HARDWARE'}")
         
-        # Get vehicle from database
+        
         try:
             self.vehicle = Vehicle.objects.get(device_id=self.device_id)
             logger.info(f"🚗 Vehicle: {self.vehicle.registration_number}")
@@ -68,14 +68,14 @@ class VehicleSecurityService:
             logger.error("   Please create a vehicle in Django admin with this device_id!")
             sys.exit(1)
         
-        # Initialize hardware modules
+    
         logger.info("\n🔌 Initializing hardware modules...")
         self.gps = get_gps_module(simulated=self.simulated)
         self.gsm = get_gsm_module(simulated=self.simulated)
         self.relay = get_relay_controller(simulated=self.simulated)
         self.facial_recognition = get_facial_recognition_system()
         
-        # Connect hardware
+        
         if self.gps.connect():
             logger.info("✅ GPS connected")
         else:
@@ -98,7 +98,7 @@ class VehicleSecurityService:
             location_data = self.gps.read_gps_data()
             
             if location_data:
-                # Save to database
+                
                 VehicleLocation.objects.create(
                     vehicle=self.vehicle,
                     latitude=location_data['latitude'],
@@ -122,20 +122,20 @@ class VehicleSecurityService:
     def check_remote_control(self):
         """Check for remote engine control commands from database"""
         try:
-            # Refresh vehicle data from database
+            
             self.vehicle.refresh_from_db()
             
-            # Check current relay status
+            
             current_relay_state = self.relay.get_status()
             should_be_enabled = self.vehicle.engine_enabled
             
-            # Compare database state with hardware state
+            
             if should_be_enabled and not current_relay_state:
-                # Database says enable, but relay is off
+    
                 logger.info("🔓 Remote ENABLE command detected")
                 self.relay.enable_engine()
                 
-                # Log event
+                
                 VehicleEvent.objects.create(
                     vehicle=self.vehicle,
                     event_type='engine_start',
@@ -143,18 +143,18 @@ class VehicleSecurityService:
                 )
                 
             elif not should_be_enabled and current_relay_state:
-                # Database says disable, but relay is on
+                
                 logger.warning("🔒 Remote DISABLE command detected")
                 self.relay.disable_engine()
                 
-                # Log event
+                
                 VehicleEvent.objects.create(
                     vehicle=self.vehicle,
                     event_type='engine_stop',
                     description='Engine disabled via remote command'
                 )
                 
-                # Send SMS alert
+                
                 if self.vehicle.owner.phone_number:
                     message = (
                         f"ALERT: Vehicle {self.vehicle.registration_number} "
@@ -173,19 +173,18 @@ class VehicleSecurityService:
         
         while self.running:
             try:
-                # Every 5 seconds: Check remote control
                 if self.loop_count % 5 == 0:
                     self.check_remote_control()
                 
-                # Every 10 seconds: Update GPS location
+                
                 if self.loop_count % 10 == 0:
                     self.update_gps_location()
                 
-                # Every 30 seconds: Heartbeat log
+                
                 if self.loop_count % 30 == 0:
                     logger.info(f"💓 Heartbeat (uptime: {self.loop_count}s)")
                 
-                # Sleep and increment
+                
                 time.sleep(1)
                 self.loop_count += 1
                 
@@ -202,10 +201,10 @@ class VehicleSecurityService:
         """Clean shutdown"""
         logger.info("\n🔴 Shutting down service...")
         
-        # Disable engine for safety
+        
         self.relay.disable_engine()
         
-        # Disconnect hardware
+        
         self.gps.disconnect()
         self.gsm.disconnect()
         
