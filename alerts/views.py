@@ -62,7 +62,7 @@ def alert_list(request):
 
 
 @login_required
-def alert_detail(request, alert_id):  # Changed from pk to alert_id
+def alert_detail(request, alert_id):  
     """View alert details"""
     alert = get_object_or_404(Alert, id=alert_id)
     
@@ -83,7 +83,7 @@ def alert_detail(request, alert_id):  # Changed from pk to alert_id
 
 @login_required
 @require_http_methods(["POST"])
-def acknowledge_alert(request, alert_id):  # Changed from pk to alert_id
+def acknowledge_alert(request, alert_id):  
     """Acknowledge an alert"""
     alert = get_object_or_404(Alert, id=alert_id)
     
@@ -144,7 +144,7 @@ def notification_logs(request):
     # Fix: Use sent_at instead of created_at (based on error message)
     logs = NotificationLog.objects.filter(alert__vehicle__in=vehicles).select_related(
         'alert', 'recipient'
-    ).order_by('-sent_at')  # Changed from created_at to sent_at
+    ).order_by('-sent_at')  
     
     # Add pagination
     paginator = Paginator(logs, 50)
