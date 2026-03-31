@@ -2,10 +2,6 @@
 # deployment/scripts/deploy.sh
 # One-shot deployment script for the Raspberry Pi (bare-metal, no Docker).
 # Run as the 'pi' user, not as root.
-#
-# Usage:
-#   chmod +x deployment/scripts/deploy.sh
-#   ./deployment/scripts/deploy.sh
 
 set -euo pipefail
 
