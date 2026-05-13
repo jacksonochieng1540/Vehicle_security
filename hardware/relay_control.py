@@ -1,7 +1,4 @@
-"""
-Relay Control Module
-Controls vehicle engine immobilization via GPIO
-"""
+
 import time
 
 
@@ -32,7 +29,7 @@ class RelayController:
             GPIO.setmode(GPIO.BCM)
             GPIO.setwarnings(False)
             GPIO.setup(self.pin, GPIO.OUT)
-            GPIO.output(self.pin, GPIO.LOW)  # Start with engine disabled
+            GPIO.output(self.pin, GPIO.LOW) 
             self.gpio_initialized = True
             print(f"GPIO initialized on pin {self.pin}")
         except Exception as e:
@@ -130,7 +127,7 @@ class SimulatedRelayController(RelayController):
         return True
 
 
-# Factory function
+
 def get_relay_controller(simulated=False):
     """
     Get relay controller instance
@@ -140,8 +137,7 @@ def get_relay_controller(simulated=False):
     """
     if simulated:
         return SimulatedRelayController()
-    
-    # Try to use real GPIO, fall back to simulation if not available
+
     try:
         import RPi.GPIO
         return RelayController()
