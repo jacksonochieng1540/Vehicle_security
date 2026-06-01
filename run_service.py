@@ -55,21 +55,21 @@ class VehicleSecurityService:
         self.device_id = self.config['DEVICE_ID']
         self.simulated = self.config['SIMULATED_HARDWARE']
         
-        logger.info(f"📋 Device ID: {self.device_id}")
-        logger.info(f"🔧 Mode: {'SIMULATED' if self.simulated else 'REAL HARDWARE'}")
+        logger.info(f" Device ID: {self.device_id}")
+        logger.info(f" Mode: {'SIMULATED' if self.simulated else 'REAL HARDWARE'}")
         
         
         try:
             self.vehicle = Vehicle.objects.get(device_id=self.device_id)
-            logger.info(f"🚗 Vehicle: {self.vehicle.registration_number}")
-            logger.info(f"👤 Owner: {self.vehicle.owner.get_full_name()}")
+            logger.info(f" Vehicle: {self.vehicle.registration_number}")
+            logger.info(f"Owner: {self.vehicle.owner.get_full_name()}")
         except Vehicle.DoesNotExist:
-            logger.error(f"❌ No vehicle found with device_id: {self.device_id}")
+            logger.error(f" No vehicle found with device_id: {self.device_id}")
             logger.error("   Please create a vehicle in Django admin with this device_id!")
             sys.exit(1)
         
     
-        logger.info("\n🔌 Initializing hardware modules...")
+        logger.info("\n Initializing hardware modules...")
         self.gps = get_gps_module(simulated=self.simulated)
         self.gsm = get_gsm_module(simulated=self.simulated)
         self.relay = get_relay_controller(simulated=self.simulated)
@@ -77,17 +77,17 @@ class VehicleSecurityService:
         
         
         if self.gps.connect():
-            logger.info("✅ GPS connected")
+            logger.info(" GPS connected")
         else:
-            logger.warning("⚠️  GPS connection failed")
+            logger.warning("  GPS connection failed")
         
         if self.gsm.connect():
-            logger.info("✅ GSM connected")
+            logger.info(" GSM connected")
         else:
-            logger.warning("⚠️  GSM connection failed")
+            logger.warning("  GSM connection failed")
         
-        logger.info("✅ Relay controller initialized")
-        logger.info("✅ Facial recognition initialized\n")
+        logger.info(" Relay controller initialized")
+        logger.info(" Facial recognition initialized\n")
         
         self.running = True
         self.loop_count = 0
@@ -109,7 +109,7 @@ class VehicleSecurityService:
                 )
                 
                 logger.info(
-                    f"📍 GPS: {location_data['latitude']:.6f}, "
+                    f" GPS: {location_data['latitude']:.6f}, "
                     f"{location_data['longitude']:.6f} "
                     f"(Satellites: {location_data.get('num_satellites', 0)})"
                 )
@@ -132,7 +132,7 @@ class VehicleSecurityService:
             
             if should_be_enabled and not current_relay_state:
     
-                logger.info("🔓 Remote ENABLE command detected")
+                logger.info(" Remote ENABLE command detected")
                 self.relay.enable_engine()
                 
                 
@@ -144,7 +144,7 @@ class VehicleSecurityService:
                 
             elif not should_be_enabled and current_relay_state:
                 
-                logger.warning("🔒 Remote DISABLE command detected")
+                logger.warning(" Remote DISABLE command detected")
                 self.relay.disable_engine()
                 
                 
@@ -161,14 +161,14 @@ class VehicleSecurityService:
                         f"has been immobilized remotely at {timezone.now().strftime('%H:%M:%S')}"
                     )
                     self.gsm.send_sms(self.vehicle.owner.phone_number, message)
-                    logger.info(f"📱 SMS alert sent to {self.vehicle.owner.phone_number}")
+                    logger.info(f" SMS alert sent to {self.vehicle.owner.phone_number}")
                 
         except Exception as e:
             logger.error(f"Remote control check error: {e}")
     
     def run(self):
         """Main service loop"""
-        logger.info("🟢 SERVICE RUNNING")
+        logger.info(" SERVICE RUNNING")
         logger.info("Press Ctrl+C to stop\n")
         
         while self.running:
@@ -182,14 +182,14 @@ class VehicleSecurityService:
                 
                 
                 if self.loop_count % 30 == 0:
-                    logger.info(f"💓 Heartbeat (uptime: {self.loop_count}s)")
+                    logger.info(f" Heartbeat (uptime: {self.loop_count}s)")
                 
                 
                 time.sleep(1)
                 self.loop_count += 1
                 
             except KeyboardInterrupt:
-                logger.info("\n⚠️  Service interrupted by user")
+                logger.info("\n  Service interrupted by user")
                 break
             except Exception as e:
                 logger.error(f"Service loop error: {e}")
@@ -199,7 +199,7 @@ class VehicleSecurityService:
     
     def cleanup(self):
         """Clean shutdown"""
-        logger.info("\n🔴 Shutting down service...")
+        logger.info("\n Shutting down service...")
         
         
         self.relay.disable_engine()
@@ -208,7 +208,7 @@ class VehicleSecurityService:
         self.gps.disconnect()
         self.gsm.disconnect()
         
-        logger.info("✅ Service stopped cleanly")
+        logger.info(" Service stopped cleanly")
 
 
 if __name__ == "__main__":
