@@ -49,7 +49,7 @@ def alert_list(request):
     page_obj = paginator.get_page(page_number)
     
     context = {
-        'alerts': page_obj,  # Keep both for template compatibility
+        'alerts': page_obj,  
         'page_obj': page_obj,
         'total_alerts': total_alerts,
         'pending_alerts': pending_alerts,
@@ -141,7 +141,7 @@ def notification_logs(request):
     else:
         vehicles = Vehicle.objects.none()
     
-    # Fix: Use sent_at instead of created_at (based on error message)
+    
     logs = NotificationLog.objects.filter(alert__vehicle__in=vehicles).select_related(
         'alert', 'recipient'
     ).order_by('-sent_at')  
