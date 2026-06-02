@@ -1,4 +1,4 @@
-{% extends 'base/base.html' %}
+{% extends 'base/base.html' %} 
 
 {% block title %}Alert Details - Vehicle Security System{% endblock %}
 
@@ -12,7 +12,6 @@
     </div>
     
     <div class="row">
-        <!-- Alert Information -->
         <div class="col-lg-8 mb-4">
             <div class="card mb-3">
                 <div class="card-header bg-{% if alert.severity == 'critical' %}danger{% elif alert.severity == 'high' %}warning{% else %}info{% endif %} text-white">
