@@ -16,7 +16,7 @@ from authentication.models import AuthenticationLog
 @login_required
 def dashboard_home(request):
     """Main dashboard view"""
-    # Get user's vehicles
+
     if request.user.role == 'owner':
         vehicles = Vehicle.objects.filter(owner=request.user)
     elif request.user.vehicle:
@@ -24,17 +24,17 @@ def dashboard_home(request):
     else:
         vehicles = Vehicle.objects.none()
     
-    # Get recent events
+
     recent_events = VehicleEvent.objects.filter(
         vehicle__in=vehicles
     ).select_related('vehicle', 'user')[:10]
     
-    # Get recent authentication logs
+    
     recent_auth_logs = AuthenticationLog.objects.filter(
         vehicle__in=vehicles
     ).select_related('user', 'vehicle')[:10]
     
-    # Count statistics
+
     total_vehicles = vehicles.count()
     active_vehicles = vehicles.filter(status='active').count()
     recent_alerts = VehicleEvent.objects.filter(
@@ -73,21 +73,21 @@ def vehicle_detail(request, vehicle_id):
     """View vehicle details and tracking"""
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     
-    # Check permission
+    
     if request.user.role != 'owner' and request.user.vehicle != vehicle:
         messages.error(request, 'You do not have permission to view this vehicle.')
         return redirect('dashboard:home')
     
-    # Get current location
+
     current_location = vehicle.get_current_location()
     
-    # Get recent locations for map
+
     recent_locations = VehicleLocation.objects.filter(vehicle=vehicle)[:50]
     
-    # Get recent events
+    
     recent_events = VehicleEvent.objects.filter(vehicle=vehicle)[:20]
     
-    # Get geofences
+    
     geofences = Geofence.objects.filter(vehicle=vehicle, is_active=True)
     
     context = {
@@ -106,7 +106,7 @@ def vehicle_control(request, vehicle_id):
     """Remote vehicle control (enable/disable engine)"""
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     
-    # Check permission
+
     if request.user.role != 'owner' and request.user.vehicle != vehicle:
         return JsonResponse({'success': False, 'message': 'Permission denied'})
     
@@ -116,7 +116,7 @@ def vehicle_control(request, vehicle_id):
         vehicle.engine_enabled = False
         vehicle.save()
         
-        # Log event
+        
         VehicleEvent.objects.create(
             vehicle=vehicle,
             event_type='remote_immobilize',
@@ -135,7 +135,7 @@ def vehicle_control(request, vehicle_id):
         vehicle.engine_enabled = True
         vehicle.save()
         
-        # Log event
+    
         VehicleEvent.objects.create(
             vehicle=vehicle,
             event_type='remote_enable',
@@ -187,12 +187,12 @@ def vehicle_tracking_history(request, vehicle_id):
     """View vehicle tracking history"""
     vehicle = get_object_or_404(Vehicle, id=vehicle_id)
     
-    # Check permission
+    
     if request.user.role != 'owner' and request.user.vehicle != vehicle:
         messages.error(request, 'You do not have permission to view this vehicle.')
         return redirect('dashboard:home')
     
-    # Get date range from request
+    
     days = int(request.GET.get('days', 7))
     start_date = timezone.now() - timedelta(days=days)
     
